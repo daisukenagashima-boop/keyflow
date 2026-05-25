@@ -80,6 +80,7 @@
 
   // ── Interaction state ──────────────────────────────────────────────────
   const LONG_PRESS_MS  = 300;   // ms before cursor mode activates
+  const CLEAR_PRESS_MS = 600;   // ms hold on ⌫ to trigger clear-all
   const STEP_SLOW      = 44;    // px per key at start (slow)
   const STEP_FAST      = 11;    // px per key at full speed
   const ACCEL_MS       = 1800;  // ms to reach full speed (ease-in)
@@ -92,7 +93,8 @@
   let startX = 0, startY = 0;
   let lastX  = 0, lastY  = 0;
   let accX   = 0, accY   = 0;
-  let didMove = false;
+  let didMove   = false;
+  let clearFired = false;
 
   // Ease-in: starts slow, accelerates to full speed over ACCEL_MS.
   function cursorStep() {
@@ -117,7 +119,8 @@
   // Use capture so we intercept before any other handlers.
   document.addEventListener('pointerdown', (e) => {
     if (e.button != null && e.button !== 0) return;
-    didMove = false;
+    didMove    = false;
+    clearFired = false;
     startX = lastX = e.clientX;
     startY = lastY = e.clientY;
     accX = accY = 0;
@@ -126,7 +129,24 @@
     if (pressedBtn) pressedBtn.classList.add('active');
 
     clearTimeout(pressTimer);
-    pressTimer = setTimeout(enterCursorMode, LONG_PRESS_MS);
+
+    const isBackspace = pressedBtn?.dataset.value === 'backspace';
+    if (isBackspace) {
+      // ⌫ 長押し → 全削除（カーソルモードには入らない）
+      pressedBtn.classList.add('hold-del');
+      pressTimer = setTimeout(() => {
+        clearFired = true;
+        if (pressedBtn) {
+          pressedBtn.classList.remove('hold-del');
+          pressedBtn.classList.add('clearing');
+          setTimeout(() => pressedBtn?.classList.remove('clearing'), 350);
+        }
+        haptic('enter');
+        send('clear', null);
+      }, CLEAR_PRESS_MS);
+    } else {
+      pressTimer = setTimeout(enterCursorMode, LONG_PRESS_MS);
+    }
   }, true);
 
   document.addEventListener('pointermove', (e) => {
@@ -155,7 +175,10 @@
       clearTimeout(pressTimer);
       pressTimer = null;
       didMove = true;
-      if (pressedBtn) { pressedBtn.classList.remove('active'); pressedBtn = null; }
+      if (pressedBtn) {
+        pressedBtn.classList.remove('active', 'hold-del');
+        pressedBtn = null;
+      }
     }
   }, true);
 
@@ -169,21 +192,29 @@
       return;
     }
 
-    // Quick tap → fire the button.
-    if (pressedBtn && !didMove) {
+    // Quick tap → fire the button（全削除が発火済みの場合はスキップ）.
+    if (pressedBtn && !didMove && !clearFired) {
       send(pressedBtn.dataset.type, pressedBtn.dataset.value);
       haptic(hapticCat(pressedBtn));
     }
-    if (pressedBtn) { pressedBtn.classList.remove('active'); pressedBtn = null; }
-    didMove = false;
+    if (pressedBtn) {
+      pressedBtn.classList.remove('active', 'hold-del');
+      pressedBtn = null;
+    }
+    didMove    = false;
+    clearFired = false;
   }, true);
 
   document.addEventListener('pointercancel', () => {
     clearTimeout(pressTimer);
     pressTimer = null;
     if (cursorMode) exitCursorMode();
-    if (pressedBtn) { pressedBtn.classList.remove('active'); pressedBtn = null; }
-    didMove = false;
+    if (pressedBtn) {
+      pressedBtn.classList.remove('active', 'hold-del');
+      pressedBtn = null;
+    }
+    didMove    = false;
+    clearFired = false;
   }, true);
 
   // Prevent iOS long-press context menu.

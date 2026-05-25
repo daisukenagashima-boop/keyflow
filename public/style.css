@@ -159,6 +159,33 @@ body {
 body.cursor-mode .cursor-overlay { display: block; }
 body.cursor-mode .grid { opacity: 0.18; pointer-events: none; }
 
+/* ── Delete long-press feedback ── */
+.btn[data-value="backspace"] {
+  position: relative;
+  overflow: hidden;
+}
+
+/* 押し込み中：赤がじわっと広がる */
+.btn[data-value="backspace"].hold-del::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: rgba(220, 60, 60, 0.25);
+  border-radius: inherit;
+  transform: scaleX(0);
+  transform-origin: left center;
+  animation: del-charge 0.6s linear forwards;
+}
+@keyframes del-charge {
+  to { transform: scaleX(1); }
+}
+
+/* 発火時：赤くフラッシュ */
+.btn[data-value="backspace"].clearing {
+  background: rgba(220, 60, 60, 0.5) !important;
+  border-color: rgba(220, 60, 60, 0.7) !important;
+}
+
 /* Landscape */
 @media (orientation: landscape) {
   .btn { font-size: clamp(13px, 3.5vh, 22px); }

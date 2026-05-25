@@ -61,6 +61,16 @@ function buildAppleScript(payload) {
     return `tell application "System Events" to key code ${code}`;
   }
 
+  if (payload.type === 'clear') {
+    // Cmd+A (全選択) → Backspace (削除)
+    return [
+      'tell application "System Events"',
+      '  keystroke "a" using {command down}',
+      '  key code 51',
+      'end tell',
+    ].join('\n');
+  }
+
   return null;
 }
 
