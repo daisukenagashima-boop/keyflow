@@ -1,0 +1,37 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <rect width="512" height="512" rx="96" fill="#111111"/>
+
+  <!-- Top row: teal accent keys (matches app symbol/action keys) -->
+  <rect x="59"  y="59"  width="118" height="118" rx="17" fill="#01C1AF"/>
+  <rect x="197" y="59"  width="118" height="118" rx="17" fill="#01C1AF"/>
+  <rect x="335" y="59"  width="118" height="118" rx="17" fill="#01C1AF"/>
+
+  <!-- Middle row: dark number keys -->
+  <rect x="59"  y="197" width="118" height="118" rx="17" fill="#1c1c1c" stroke="rgba(255,255,255,0.07)" stroke-width="2"/>
+  <rect x="197" y="197" width="118" height="118" rx="17" fill="#1c1c1c" stroke="rgba(255,255,255,0.07)" stroke-width="2"/>
+  <rect x="335" y="197" width="118" height="118" rx="17" fill="#1c1c1c" stroke="rgba(255,255,255,0.07)" stroke-width="2"/>
+
+  <!-- Bottom row: dark number keys -->
+  <rect x="59"  y="335" width="118" height="118" rx="17" fill="#1c1c1c" stroke="rgba(255,255,255,0.07)" stroke-width="2"/>
+  <rect x="197" y="335" width="118" height="118" rx="17" fill="#1c1c1c" stroke="rgba(255,255,255,0.07)" stroke-width="2"/>
+  <rect x="335" y="335" width="118" height="118" rx="17" fill="#1c1c1c" stroke="rgba(255,255,255,0.07)" stroke-width="2"/>
+
+  <!-- Symbol text on teal keys -->
+  <g fill="rgba(0,20,18,0.75)" font-family="-apple-system,Helvetica,Arial,sans-serif"
+     font-weight="700" text-anchor="middle" dominant-baseline="central" font-size="58">
+    <text x="118" y="118">%</text>
+    <text x="256" y="118">/</text>
+    <text x="394" y="118">+</text>
+  </g>
+
+  <!-- Numbers on dark keys -->
+  <g fill="#d0d0d0" font-family="-apple-system,Helvetica,Arial,sans-serif"
+     font-weight="600" text-anchor="middle" dominant-baseline="central" font-size="58">
+    <text x="118" y="256">7</text>
+    <text x="256" y="256">8</text>
+    <text x="394" y="256">9</text>
+    <text x="118" y="394">4</text>
+    <text x="256" y="394">5</text>
+    <text x="394" y="394">6</text>
+  </g>
+</svg>

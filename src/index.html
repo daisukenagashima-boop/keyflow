@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8" />
+  <title>KeyFlow</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <div id="waiting">
+    <div class="spinner"></div>
+    <p>サーバー起動中…</p>
+  </div>
+
+  <div id="ready">
+    <h1>iPhone で読み込む</h1>
+    <div class="qr-wrap">
+      <img id="qr-img" alt="QR Code" />
+    </div>
+    <p id="url-text"></p>
+    <p class="hint">同じ Wi-Fi に繋いでください</p>
+  </div>
+
+  <script>
+    const waiting = document.getElementById('waiting');
+    const ready   = document.getElementById('ready');
+    const qrImg   = document.getElementById('qr-img');
+    const urlText = document.getElementById('url-text');
+
+    function show(info) {
+      if (!info) return;
+      waiting.style.display = 'none';
+      ready.style.display   = 'flex';
+      qrImg.src    = info.qr;
+      urlText.textContent = info.url.replace(/^https?:\/\//, '');
+    }
+
+    window.numpad.getInfo().then(show);
+    window.numpad.onInfo(show);
+  </script>
+</body>
+</html>
