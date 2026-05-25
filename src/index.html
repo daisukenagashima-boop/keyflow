@@ -108,8 +108,17 @@
     }
 
     function loadQR() {
-      window.numpad.getInfo().then(showQR);
+      // onInfo を先に登録してから現在の状態を取得する
       window.numpad.onInfo(showQR);
+      window.numpad.getInfo().then(info => {
+        if (info) { showQR(info); return; }
+        // サーバー起動待ち：1秒ごとにリトライ（最大15秒）
+        const iv = setInterval(async () => {
+          const i = await window.numpad.getInfo();
+          if (i) { showQR(i); clearInterval(iv); }
+        }, 1000);
+        setTimeout(() => clearInterval(iv), 15000);
+      });
     }
 
     // ── バージョン表示 ────────────────────────────────────────────
