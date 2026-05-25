@@ -111,6 +111,25 @@ function createWindow() {
 }
 
 // ── Tray ─────────────────────────────────────────────────────────────────────
+function buildTrayMenu() {
+  const openAtLogin = app.getLoginItemSettings().openAtLogin;
+  return Menu.buildFromTemplate([
+    { label: 'QR コードを表示', click: () => { win?.show(); win?.focus(); } },
+    { type: 'separator' },
+    {
+      label: 'ログイン時に自動起動',
+      type: 'checkbox',
+      checked: openAtLogin,
+      click: (item) => {
+        app.setLoginItemSettings({ openAtLogin: item.checked });
+        tray.setContextMenu(buildTrayMenu());
+      },
+    },
+    { type: 'separator' },
+    { label: '終了', click: () => app.exit(0) },
+  ]);
+}
+
 function createTray() {
   const imgPath = path.join(__dirname, 'public', 'icon-192.png');
   const img = nativeImage.createFromPath(imgPath).resize({ width: 16, height: 16 });
@@ -121,11 +140,7 @@ function createTray() {
     if (!win) return;
     win.isVisible() ? win.focus() : win.show();
   });
-  tray.setContextMenu(Menu.buildFromTemplate([
-    { label: 'QR コードを表示', click: () => { win?.show(); win?.focus(); } },
-    { type: 'separator' },
-    { label: '終了', click: () => app.exit(0) },
-  ]));
+  tray.setContextMenu(buildTrayMenu());
 }
 
 // ── Boot ─────────────────────────────────────────────────────────────────────
@@ -141,6 +156,12 @@ app.whenReady().then(() => {
 
   createWindow();
   createTray();
+
+  // 初回インストール時はログイン時自動起動をオンにする
+  if (!app.getLoginItemSettings().openAtLogin) {
+    app.setLoginItemSettings({ openAtLogin: true });
+    tray.setContextMenu(buildTrayMenu());
+  }
 
   // 起動5秒後にアップデート確認（起動を遅らせないため遅延）
   setTimeout(checkForUpdates, 5000);
