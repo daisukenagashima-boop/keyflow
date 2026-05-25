@@ -31,7 +31,15 @@
     reconnectionDelayMax: 3000,
   });
 
-  socket.on('connect',       () => setStatus('● connected', 'ok'));
+  const verEl = document.getElementById('ver');
+
+  socket.on('connect', () => {
+    setStatus('● connected', 'ok');
+    fetch('/healthz')
+      .then(r => r.json())
+      .then(d => { if (verEl && d.version) verEl.textContent = 'v' + d.version; })
+      .catch(() => {});
+  });
   socket.on('disconnect', (r) => setStatus('○ ' + r, 'bad'));
   socket.on('connect_error', (e) => setStatus('× ' + e.message, 'bad'));
 

@@ -51,6 +51,7 @@
       </div>
     </div>
     <p class="global-hint">同じ Wi-Fi に繋いでください</p>
+    <p class="app-version" id="app-version"></p>
   </div>
 
   <script>
@@ -110,6 +111,11 @@
       window.numpad.getInfo().then(showQR);
       window.numpad.onInfo(showQR);
     }
+
+    // ── バージョン表示 ────────────────────────────────────────────
+    window.numpad.getVersion().then(v => {
+      $('app-version').textContent = 'v' + v;
+    });
 
     // ── 起動シーケンス ────────────────────────────────────────────
     checkA11y();

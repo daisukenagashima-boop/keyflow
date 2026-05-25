@@ -72,6 +72,7 @@ async function buildInfo() {
 
 ipcMain.handle('get-server-info',       async () => buildInfo());
 ipcMain.handle('get-accessibility',     () => systemPreferences.isTrustedAccessibilityClient(false));
+ipcMain.handle('get-version',           () => app.getVersion());
 ipcMain.on    ('open-accessibility',    () => shell.openExternal(
   'x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility'
 ));
@@ -131,9 +132,10 @@ function createTray() {
 app.whenReady().then(() => {
   app.dock?.hide();
 
-  // Pass resource/data paths to server.js before requiring it
+  // Pass resource/data paths and version to server.js before requiring it
   process.env.APP_RESOURCES_PATH = __dirname;
   process.env.APP_DATA_PATH = app.getPath('userData');
+  process.env.APP_VERSION = app.getVersion();
 
   require('./server.js');
 

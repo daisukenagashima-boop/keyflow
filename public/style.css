@@ -61,7 +61,12 @@ body {
 .status.ok  { color: var(--status-ok); }
 .status.bad { color: var(--status-bad); }
 
-.hint { color: var(--text-dim); }
+.ver {
+  font-size: 10px;
+  color: var(--text-dim);
+  font-variant-numeric: tabular-nums;
+  opacity: 0.6;
+}
 
 /* ── Grid ── */
 .grid {

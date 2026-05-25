@@ -7,4 +7,5 @@ contextBridge.exposeInMainWorld('numpad', {
   onInfo:             (cb) => ipcRenderer.on('server-info', (_, info) => cb(info)),
   getAccessibility:   () => ipcRenderer.invoke('get-accessibility'),
   openAccessibility:  () => ipcRenderer.send('open-accessibility'),
+  getVersion:         () => ipcRenderer.invoke('get-version'),
 });

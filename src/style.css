@@ -107,6 +107,12 @@ h1 {
   color: #3a3a3a;
 }
 
+.app-version {
+  font-size: 10px;
+  color: #2a2a2a;
+  letter-spacing: 0.04em;
+}
+
 /* ── Setup ── */
 #setup {
   display: none;

@@ -9,8 +9,9 @@ const crypto = require('crypto');
 const { execFile } = require('child_process');
 const { Server } = require('socket.io');
 
-const PORT = Number(process.env.PORT) || 3000;
-const HOST = process.env.HOST || '0.0.0.0';
+const PORT    = Number(process.env.PORT) || 3000;
+const HOST    = process.env.HOST || '0.0.0.0';
+const VERSION = process.env.APP_VERSION || '?';
 
 // When running as a Tauri sidecar, these env vars are passed in.
 const BASE_DIR = process.env.APP_RESOURCES_PATH || __dirname;
@@ -122,7 +123,7 @@ app.use(express.static(path.join(BASE_DIR, 'public'), {
   },
 }));
 
-app.get('/healthz', (_req, res) => res.json({ ok: true }));
+app.get('/healthz', (_req, res) => res.json({ ok: true, version: VERSION }));
 
 io.use((socket, next) => {
   const auth = socket.handshake.auth?.token || socket.handshake.query?.token;
