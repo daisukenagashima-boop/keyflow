@@ -60,7 +60,7 @@
 
     function showScreen(name) {
       Object.entries(screens).forEach(([k, el]) => {
-        el.style.display = k === name ? '' : 'none';
+        el.style.display = k === name ? 'flex' : 'none';
       });
     }
     showScreen('waiting');
