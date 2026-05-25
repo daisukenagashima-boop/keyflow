@@ -2,10 +2,15 @@
 
 const {
   app, BrowserWindow, Tray, Menu, nativeImage, ipcMain, dialog, shell,
-  systemPreferences,
+  systemPreferences, Notification,
 } = require('electron');
-const path = require('path');
-const qrcode = require('qrcode');
+const path     = require('path');
+const https    = require('https');
+const http     = require('http');
+const fs       = require('fs');
+const os       = require('os');
+const { execFile } = require('child_process');
+const qrcode   = require('qrcode');
 
 const LATEST_JSON_URL =
   'https://raw.githubusercontent.com/daisukenagashima-boop/keyflow/main/latest.json';
@@ -21,36 +26,143 @@ function isNewer(a, b) {
   return false;
 }
 
+// リダイレクトを辿りながらファイルをダウンロードする
+function downloadFile(url, dest) {
+  return new Promise((resolve, reject) => {
+    const attempt = (u) => {
+      const mod = u.startsWith('https') ? https : http;
+      const file = fs.createWriteStream(dest);
+      mod.get(u, { headers: { 'User-Agent': `KeyFlow/${app.getVersion()}` } }, (res) => {
+        if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
+          file.destroy();
+          attempt(res.headers.location);
+          return;
+        }
+        if (res.statusCode !== 200) {
+          file.destroy();
+          reject(new Error(`HTTP ${res.statusCode}`));
+          return;
+        }
+        res.pipe(file);
+        file.on('finish', () => file.close(resolve));
+        file.on('error', reject);
+        res.on('error', reject);
+      }).on('error', reject);
+    };
+    attempt(url);
+  });
+}
+
+// DMGをマウントして .app を上書きコピーし再起動する
+async function installUpdate(dmgPath) {
+  // マウント
+  const stdout = await new Promise((resolve, reject) => {
+    execFile('hdiutil', ['attach', '-nobrowse', '-readonly', dmgPath], (err, out) => {
+      if (err) reject(err); else resolve(out);
+    });
+  });
+  const mountPoint = stdout.trim().split('\n').pop().split('\t').pop().trim();
+  const srcApp = path.join(mountPoint, 'KeyFlow.app');
+  // 現在の .app の場所に上書き（/Applications 以外に置いた場合も対応）
+  const dstApp = path.resolve(app.getPath('exe'), '../../..');
+
+  // まず権限なしで試み、失敗したら管理者パスワードを求める
+  const tryCopy = (withAdmin) => new Promise((resolve, reject) => {
+    if (!withAdmin) {
+      execFile('ditto', [srcApp, dstApp], (err) => err ? reject(err) : resolve());
+    } else {
+      const esc = (s) => s.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+      const script = `do shell script "ditto '${esc(srcApp)}' '${esc(dstApp)}'" with administrator privileges`;
+      execFile('osascript', ['-e', script], (err) => err ? reject(err) : resolve());
+    }
+  });
+
+  try {
+    await tryCopy(false);
+  } catch {
+    await tryCopy(true);
+  }
+
+  execFile('hdiutil', ['detach', mountPoint, '-force'], () => {});
+  try { fs.unlinkSync(dmgPath); } catch {}
+}
+
 async function checkForUpdates(manual = false) {
   try {
     const res = await fetch(LATEST_JSON_URL, { signal: AbortSignal.timeout(6000) });
     if (!res.ok) {
-      if (manual) dialog.showMessageBox({ type: 'warning', title: 'KeyFlow', message: '更新情報を取得できませんでした', buttons: ['OK'] });
+      if (manual) await dialog.showMessageBox({ type: 'warning', title: 'KeyFlow', message: '更新情報を取得できませんでした', buttons: ['OK'] });
       return;
     }
     const data = await res.json();
     if (!isNewer(data.version, app.getVersion())) {
-      if (manual) dialog.showMessageBox({ type: 'info', title: 'KeyFlow', message: '最新バージョンを使用しています', detail: `現在: v${app.getVersion()}`, buttons: ['OK'] });
+      if (manual) await dialog.showMessageBox({ type: 'info', title: 'KeyFlow', message: '最新バージョンを使用しています', detail: `現在: v${app.getVersion()}`, buttons: ['OK'] });
       return;
     }
 
+    const canAutoInstall = !!data.download;
     const { response } = await dialog.showMessageBox({
       type: 'info',
       title: 'KeyFlow アップデート',
-      message: `新バージョン ${data.version} が利用可能です`,
-      detail: `現在: ${app.getVersion()}${data.notes ? '\n\n' + data.notes : ''}`,
-      buttons: ['ダウンロード', '後で'],
+      message: `新バージョン v${data.version} が利用可能です`,
+      detail: `現在: v${app.getVersion()}${data.notes ? '\n\n' + data.notes : ''}`,
+      buttons: canAutoInstall ? ['自動でインストール', '後で'] : ['ダウンロードページを開く', '後で'],
       defaultId: 0,
     });
-    if (response === 0) shell.openExternal(data.url);
-  } catch {
-    if (manual) dialog.showMessageBox({ type: 'warning', title: 'KeyFlow', message: '更新確認中にエラーが発生しました', buttons: ['OK'] });
+
+    if (response === 1) return;
+
+    if (!canAutoInstall) {
+      shell.openExternal(data.url);
+      return;
+    }
+
+    // ── 自動インストール ──────────────────────────────────────────
+    const tmpDmg = path.join(os.tmpdir(), `KeyFlow-${data.version}.dmg`);
+
+    new Notification({ title: 'KeyFlow', body: `v${data.version} をダウンロード中…` }).show();
+
+    try {
+      await downloadFile(data.download, tmpDmg);
+    } catch (e) {
+      await dialog.showMessageBox({ type: 'error', title: 'KeyFlow', message: 'ダウンロードに失敗しました', detail: e.message, buttons: ['OK'] });
+      return;
+    }
+
+    const { response: installRes } = await dialog.showMessageBox({
+      type: 'info',
+      title: 'KeyFlow アップデート完了',
+      message: `v${data.version} の準備ができました`,
+      detail: 'インストールしてアプリを再起動します',
+      buttons: ['インストールして再起動', 'あとで'],
+      defaultId: 0,
+    });
+    if (installRes === 1) return;
+
+    try {
+      await installUpdate(tmpDmg);
+    } catch (e) {
+      await dialog.showMessageBox({
+        type: 'error', title: 'KeyFlow',
+        message: 'インストールに失敗しました',
+        detail: e.message + '\n\n手動でインストールしてください',
+        buttons: ['ダウンロードページを開く'],
+      });
+      shell.openExternal(data.url);
+      return;
+    }
+
+    app.relaunch();
+    app.exit(0);
+
+  } catch (e) {
+    if (manual) await dialog.showMessageBox({ type: 'warning', title: 'KeyFlow', message: '更新確認中にエラーが発生しました', detail: e.message, buttons: ['OK'] });
   }
 }
 
-let iosUrl     = null;  // .local — iPhone ホーム画面向け
-let androidUrl = null;  // IP    — Android Chrome 向け
-let win = null;
+let iosUrl     = null;
+let androidUrl = null;
+let win  = null;
 let tray = null;
 
 const QR_OPTS = { width: 200, margin: 2, color: { dark: '#000000ff', light: '#ffffffff' } };
@@ -78,10 +190,10 @@ async function buildInfo() {
   };
 }
 
-ipcMain.handle('get-server-info',       async () => buildInfo());
-ipcMain.handle('get-accessibility',     () => systemPreferences.isTrustedAccessibilityClient(false));
-ipcMain.handle('get-version',           () => app.getVersion());
-ipcMain.on    ('open-accessibility',    () => shell.openExternal(
+ipcMain.handle('get-server-info',    async () => buildInfo());
+ipcMain.handle('get-accessibility',  () => systemPreferences.isTrustedAccessibilityClient(false));
+ipcMain.handle('get-version',        () => app.getVersion());
+ipcMain.on    ('open-accessibility', () => shell.openExternal(
   'x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility'
 ));
 
@@ -157,7 +269,6 @@ function createTray() {
 app.whenReady().then(() => {
   app.dock?.hide();
 
-  // Pass resource/data paths and version to server.js before requiring it
   process.env.APP_RESOURCES_PATH = __dirname;
   process.env.APP_DATA_PATH = app.getPath('userData');
   process.env.APP_VERSION = app.getVersion();
@@ -167,14 +278,12 @@ app.whenReady().then(() => {
   createWindow();
   createTray();
 
-  // 初回インストール時はログイン時自動起動をオンにする
   if (!app.getLoginItemSettings().openAtLogin) {
     app.setLoginItemSettings({ openAtLogin: true });
     tray.setContextMenu(buildTrayMenu());
   }
 
-  // 起動5秒後にアップデート確認（起動を遅らせないため遅延）
   setTimeout(checkForUpdates, 5000);
 });
 
-app.on('window-all-closed', () => {}); // never auto-quit; tray keeps app alive
+app.on('window-all-closed', () => {});
