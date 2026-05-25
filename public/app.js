@@ -36,7 +36,15 @@
   socket.on('connect_error', (e) => setStatus('× ' + e.message, 'bad'));
 
   function send(type, value) {
-    if (socket.connected) socket.emit('input', { type, value });
+    if (!socket.connected) return;
+    socket.emit('input', { type, value }, (ack) => {
+      if (ack && !ack.ok) {
+        setStatus('× ' + (ack.error || 'error'), 'bad');
+        setTimeout(() => {
+          if (socket.connected) setStatus('● connected', 'ok');
+        }, 3000);
+      }
+    });
   }
 
   // ── Haptic + audio feedback ────────────────────────────────────────────

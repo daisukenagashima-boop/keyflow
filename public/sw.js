@@ -1,4 +1,4 @@
-const CACHE = 'keyflow-v1';
+const CACHE = 'keyflow-v2';
 const ASSETS = [
   '/',
   '/index.html',
