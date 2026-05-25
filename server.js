@@ -114,7 +114,13 @@ app.get('/manifest.webmanifest', (_req, res) => {
   });
 });
 
-app.use(express.static(path.join(BASE_DIR, 'public'), { extensions: ['html'] }));
+app.use(express.static(path.join(BASE_DIR, 'public'), {
+  extensions: ['html'],
+  setHeaders: (res) => {
+    // ブラウザキャッシュを使わず毎回サーバーに確認させる
+    res.setHeader('Cache-Control', 'no-cache');
+  },
+}));
 
 app.get('/healthz', (_req, res) => res.json({ ok: true }));
 
