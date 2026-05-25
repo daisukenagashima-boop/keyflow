@@ -26,16 +26,20 @@ function isNewer(a, b) {
   return false;
 }
 
-// リダイレクトを辿りながらファイルをダウンロードする
+// リダイレクトを辿りながらファイルをダウンロードする（最大10回）
 function downloadFile(url, dest) {
   return new Promise((resolve, reject) => {
-    const attempt = (u) => {
+    const attempt = (u, redirects = 0) => {
+      if (redirects > 10) {
+        reject(new Error('リダイレクトが多すぎます'));
+        return;
+      }
       const mod = u.startsWith('https') ? https : http;
       const file = fs.createWriteStream(dest);
       mod.get(u, { headers: { 'User-Agent': `KeyFlow/${app.getVersion()}` } }, (res) => {
         if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
           file.destroy();
-          attempt(res.headers.location);
+          attempt(res.headers.location, redirects + 1);
           return;
         }
         if (res.statusCode !== 200) {

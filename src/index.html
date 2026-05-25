@@ -69,7 +69,7 @@
     async function checkA11y() {
       const ok = await window.numpad.getAccessibility();
       if (ok) {
-        showScreen('waiting'); // サーバー待ち
+        showScreen('waiting');
         loadQR();
       } else {
         showScreen('setup');
@@ -83,8 +83,7 @@
     $('btn-check').addEventListener('click', async () => {
       const ok = await window.numpad.getAccessibility();
       if (ok) {
-        showScreen('waiting');
-        loadQR();
+        checkA11y(); // 再チェックして遷移
       } else {
         $('setup-err').textContent = 'まだ許可されていません。スイッチがオンか確認してください。';
       }

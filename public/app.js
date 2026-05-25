@@ -198,13 +198,23 @@
     }
   }, true);
 
-  document.addEventListener('pointerup', (e) => {
+  function resetPressState() {
     clearTimeout(pressTimer);
     pressTimer = null;
+    if (pressedBtn) {
+      pressedBtn.classList.remove('active', 'hold-del');
+      pressedBtn = null;
+    }
+    didMove    = false;
+    clearFired = false;
+  }
 
+  document.addEventListener('pointerup', (e) => {
     if (cursorMode) {
       exitCursorMode();
       if (pressedBtn) { pressedBtn.classList.remove('active'); pressedBtn = null; }
+      clearTimeout(pressTimer);
+      pressTimer = null;
       return;
     }
 
@@ -213,24 +223,12 @@
       send(pressedBtn.dataset.type, pressedBtn.dataset.value);
       haptic(hapticCat(pressedBtn));
     }
-    if (pressedBtn) {
-      pressedBtn.classList.remove('active', 'hold-del');
-      pressedBtn = null;
-    }
-    didMove    = false;
-    clearFired = false;
+    resetPressState();
   }, true);
 
   document.addEventListener('pointercancel', () => {
-    clearTimeout(pressTimer);
-    pressTimer = null;
     if (cursorMode) exitCursorMode();
-    if (pressedBtn) {
-      pressedBtn.classList.remove('active', 'hold-del');
-      pressedBtn = null;
-    }
-    didMove    = false;
-    clearFired = false;
+    resetPressState();
   }, true);
 
   // Prevent iOS long-press context menu.
