@@ -21,12 +21,18 @@ function isNewer(a, b) {
   return false;
 }
 
-async function checkForUpdates() {
+async function checkForUpdates(manual = false) {
   try {
     const res = await fetch(LATEST_JSON_URL, { signal: AbortSignal.timeout(6000) });
-    if (!res.ok) return;
+    if (!res.ok) {
+      if (manual) dialog.showMessageBox({ type: 'warning', title: 'KeyFlow', message: '更新情報を取得できませんでした', buttons: ['OK'] });
+      return;
+    }
     const data = await res.json();
-    if (!isNewer(data.version, app.getVersion())) return;
+    if (!isNewer(data.version, app.getVersion())) {
+      if (manual) dialog.showMessageBox({ type: 'info', title: 'KeyFlow', message: '最新バージョンを使用しています', detail: `現在: v${app.getVersion()}`, buttons: ['OK'] });
+      return;
+    }
 
     const { response } = await dialog.showMessageBox({
       type: 'info',
@@ -37,7 +43,9 @@ async function checkForUpdates() {
       defaultId: 0,
     });
     if (response === 0) shell.openExternal(data.url);
-  } catch { /* ネットワーク不可などは無視 */ }
+  } catch {
+    if (manual) dialog.showMessageBox({ type: 'warning', title: 'KeyFlow', message: '更新確認中にエラーが発生しました', buttons: ['OK'] });
+  }
 }
 
 let iosUrl     = null;  // .local — iPhone ホーム画面向け
@@ -125,6 +133,8 @@ function buildTrayMenu() {
         tray.setContextMenu(buildTrayMenu());
       },
     },
+    { type: 'separator' },
+    { label: 'アップデートを確認…', click: () => checkForUpdates(true) },
     { type: 'separator' },
     { label: '終了', click: () => app.exit(0) },
   ]);
