@@ -190,7 +190,16 @@ findFreePort(PORT, (err, port) => {
     console.log('=========================================');
     console.log('');
 
-    // Send primary URL to Electron window (used for QR code).
-    process.stdout.write(`NUMPAD_URL=${primaryUrl}\n`);
+    // Send URLs to Electron window (used for QR codes).
+    // .local  → iPhone: stable across IP changes, ideal for home screen PWA
+    // IP      → Android: mDNS unreliable on Android, IP is safer
+    if (mdns) {
+      process.stdout.write(`NUMPAD_URL=http://${mdns}:${port}/?t=${TOKEN}\n`);
+    }
+    if (ips.length > 0) {
+      process.stdout.write(`NUMPAD_URL=http://${ips[0]}:${port}/?t=${TOKEN}\n`);
+    } else if (!mdns) {
+      process.stdout.write(`NUMPAD_URL=http://localhost:${port}/?t=${TOKEN}\n`);
+    }
   });
 });

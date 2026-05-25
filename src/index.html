@@ -12,26 +12,52 @@
   </div>
 
   <div id="ready">
-    <h1>iPhone で読み込む</h1>
-    <div class="qr-wrap">
-      <img id="qr-img" alt="QR Code" />
+    <h1>カメラで読み込んで接続</h1>
+
+    <div class="qr-row">
+      <!-- iPhone card -->
+      <div class="qr-card" id="ios-card">
+        <div class="platform-label">🍎 iPhone</div>
+        <div class="qr-wrap"><img id="ios-qr" alt="iPhone QR" /></div>
+        <p class="qr-url" id="ios-url"></p>
+        <p class="qr-hint">ホーム画面追加に最適</p>
+      </div>
+
+      <!-- Android card -->
+      <div class="qr-card" id="android-card">
+        <div class="platform-label">🤖 Android</div>
+        <div class="qr-wrap"><img id="android-qr" alt="Android QR" /></div>
+        <p class="qr-url" id="android-url"></p>
+        <p class="qr-hint">Chrome で開く</p>
+      </div>
     </div>
-    <p id="url-text"></p>
-    <p class="hint">同じ Wi-Fi に繋いでください</p>
+
+    <p class="global-hint">同じ Wi-Fi に繋いでください</p>
   </div>
 
   <script>
-    const waiting = document.getElementById('waiting');
-    const ready   = document.getElementById('ready');
-    const qrImg   = document.getElementById('qr-img');
-    const urlText = document.getElementById('url-text');
+    const waiting     = document.getElementById('waiting');
+    const ready       = document.getElementById('ready');
+    const iosCard     = document.getElementById('ios-card');
+    const androidCard = document.getElementById('android-card');
 
     function show(info) {
       if (!info) return;
       waiting.style.display = 'none';
       ready.style.display   = 'flex';
-      qrImg.src    = info.qr;
-      urlText.textContent = info.url.replace(/^https?:\/\//, '');
+
+      const fill = (card, imgEl, urlEl, data) => {
+        if (data) {
+          card.style.display = 'flex';
+          imgEl.src = data.qr;
+          urlEl.textContent = data.url.replace(/^https?:\/\//, '').replace(/\/\?t=.+/, '');
+        } else {
+          card.style.display = 'none';
+        }
+      };
+
+      fill(iosCard,     document.getElementById('ios-qr'),     document.getElementById('ios-url'),     info.ios);
+      fill(androidCard, document.getElementById('android-qr'), document.getElementById('android-url'), info.android);
     }
 
     window.numpad.getInfo().then(show);

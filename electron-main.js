@@ -39,9 +39,12 @@ async function checkForUpdates() {
   } catch { /* ネットワーク不可などは無視 */ }
 }
 
-let serverUrls = [];
+let iosUrl     = null;  // .local — iPhone ホーム画面向け
+let androidUrl = null;  // IP    — Android Chrome 向け
 let win = null;
 let tray = null;
+
+const QR_OPTS = { width: 200, margin: 2, color: { dark: '#000000ff', light: '#ffffffff' } };
 
 // ── Intercept NUMPAD_URL= lines that server.js writes to stdout ──────────────
 const _origWrite = process.stdout.write.bind(process.stdout);
@@ -50,36 +53,35 @@ process.stdout.write = function (chunk, encoding, cb) {
   const m = s.match(/NUMPAD_URL=(.+)/);
   if (m) {
     const url = m[1].trim();
-    if (!serverUrls.includes(url)) {
-      serverUrls.push(url);
-      sendInfo();
-    }
+    if (url.includes('.local')) { if (!iosUrl)     { iosUrl     = url; sendInfo(); } }
+    else                        { if (!androidUrl) { androidUrl = url; sendInfo(); } }
   }
   return _origWrite(chunk, encoding, cb);
 };
 
 // ── IPC ─────────────────────────────────────────────────────────────────────
-ipcMain.handle('get-server-info', async () => {
-  const url = serverUrls[0];
-  if (!url) return null;
-  const qr = await qrcode.toDataURL(url, { width: 256, margin: 2,
-    color: { dark: '#000000ff', light: '#ffffffff' } });
-  return { url, qr };
-});
+async function buildInfo() {
+  if (!iosUrl && !androidUrl) return null;
+  const makeQR = (u) => qrcode.toDataURL(u, QR_OPTS);
+  return {
+    ios:     iosUrl     ? { url: iosUrl,     qr: await makeQR(iosUrl)     } : null,
+    android: androidUrl ? { url: androidUrl, qr: await makeQR(androidUrl) } : null,
+  };
+}
+
+ipcMain.handle('get-server-info', async () => buildInfo());
 
 async function sendInfo() {
-  if (!win || win.isDestroyed() || !serverUrls[0]) return;
-  const url = serverUrls[0];
-  const qr = await qrcode.toDataURL(url, { width: 256, margin: 2,
-    color: { dark: '#000000ff', light: '#ffffffff' } });
-  win.webContents.send('server-info', { url, qr });
+  if (!win || win.isDestroyed()) return;
+  const info = await buildInfo();
+  if (info) win.webContents.send('server-info', info);
 }
 
 // ── Window ───────────────────────────────────────────────────────────────────
 function createWindow() {
   win = new BrowserWindow({
-    width: 340,
-    height: 430,
+    width: 400,
+    height: 420,
     resizable: false,
     title: 'KeyFlow',
     backgroundColor: '#111111',
