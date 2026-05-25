@@ -2,6 +2,7 @@
 
 const {
   app, BrowserWindow, Tray, Menu, nativeImage, ipcMain, dialog, shell,
+  systemPreferences,
 } = require('electron');
 const path = require('path');
 const qrcode = require('qrcode');
@@ -69,7 +70,11 @@ async function buildInfo() {
   };
 }
 
-ipcMain.handle('get-server-info', async () => buildInfo());
+ipcMain.handle('get-server-info',       async () => buildInfo());
+ipcMain.handle('get-accessibility',     () => systemPreferences.isTrustedAccessibilityClient(false));
+ipcMain.on    ('open-accessibility',    () => shell.openExternal(
+  'x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility'
+));
 
 async function sendInfo() {
   if (!win || win.isDestroyed()) return;
@@ -100,7 +105,7 @@ function createWindow() {
   });
 
   win.webContents.on('did-finish-load', () => {
-    if (serverUrls.length > 0) sendInfo();
+    if (iosUrl || androidUrl) sendInfo();
   });
 }
 

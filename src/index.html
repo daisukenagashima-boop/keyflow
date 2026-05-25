@@ -6,24 +6,43 @@
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
+
+  <!-- 起動中 -->
   <div id="waiting">
     <div class="spinner"></div>
-    <p>サーバー起動中…</p>
+    <p>起動中…</p>
   </div>
 
+  <!-- アクセシビリティ未許可 -->
+  <div id="setup">
+    <div class="setup-icon">🔐</div>
+    <h2>初回設定</h2>
+    <p class="setup-desc">
+      キー入力を送るには<br>
+      <strong>アクセシビリティ</strong>の許可が必要です
+    </p>
+    <ol class="setup-steps">
+      <li>「設定を開く」をクリック</li>
+      <li>左下の「＋」で <strong>KeyFlow</strong> を追加</li>
+      <li>スイッチを <strong>オン</strong> にする</li>
+    </ol>
+    <div class="setup-btns">
+      <button id="btn-open-settings">設定を開く →</button>
+      <button id="btn-check" class="secondary">許可した ✓</button>
+    </div>
+    <p id="setup-err" class="setup-err"></p>
+  </div>
+
+  <!-- QR 表示 -->
   <div id="ready">
     <h1>カメラで読み込んで接続</h1>
-
     <div class="qr-row">
-      <!-- iPhone card -->
       <div class="qr-card" id="ios-card">
         <div class="platform-label">🍎 iPhone</div>
         <div class="qr-wrap"><img id="ios-qr" alt="iPhone QR" /></div>
         <p class="qr-url" id="ios-url"></p>
         <p class="qr-hint">ホーム画面追加に最適</p>
       </div>
-
-      <!-- Android card -->
       <div class="qr-card" id="android-card">
         <div class="platform-label">🤖 Android</div>
         <div class="qr-wrap"><img id="android-qr" alt="Android QR" /></div>
@@ -31,37 +50,69 @@
         <p class="qr-hint">Chrome で開く</p>
       </div>
     </div>
-
     <p class="global-hint">同じ Wi-Fi に繋いでください</p>
   </div>
 
   <script>
-    const waiting     = document.getElementById('waiting');
-    const ready       = document.getElementById('ready');
-    const iosCard     = document.getElementById('ios-card');
-    const androidCard = document.getElementById('android-card');
+    const $ = (id) => document.getElementById(id);
+    const screens = { waiting: $('waiting'), setup: $('setup'), ready: $('ready') };
 
-    function show(info) {
-      if (!info) return;
-      waiting.style.display = 'none';
-      ready.style.display   = 'flex';
+    function showScreen(name) {
+      Object.entries(screens).forEach(([k, el]) => {
+        el.style.display = k === name ? '' : 'none';
+      });
+    }
+    showScreen('waiting');
 
-      const fill = (card, imgEl, urlEl, data) => {
-        if (data) {
-          card.style.display = 'flex';
-          imgEl.src = data.qr;
-          urlEl.textContent = data.url.replace(/^https?:\/\//, '').replace(/\/\?t=.+/, '');
-        } else {
-          card.style.display = 'none';
-        }
-      };
-
-      fill(iosCard,     document.getElementById('ios-qr'),     document.getElementById('ios-url'),     info.ios);
-      fill(androidCard, document.getElementById('android-qr'), document.getElementById('android-url'), info.android);
+    // ── アクセシビリティ確認 ──────────────────────────────────────
+    async function checkA11y() {
+      const ok = await window.numpad.getAccessibility();
+      if (ok) {
+        showScreen('waiting'); // サーバー待ち
+        loadQR();
+      } else {
+        showScreen('setup');
+      }
     }
 
-    window.numpad.getInfo().then(show);
-    window.numpad.onInfo(show);
+    $('btn-open-settings').addEventListener('click', () => {
+      window.numpad.openAccessibility();
+    });
+
+    $('btn-check').addEventListener('click', async () => {
+      const ok = await window.numpad.getAccessibility();
+      if (ok) {
+        showScreen('waiting');
+        loadQR();
+      } else {
+        $('setup-err').textContent = 'まだ許可されていません。スイッチがオンか確認してください。';
+      }
+    });
+
+    // ── QR 表示 ──────────────────────────────────────────────────
+    function showQR(info) {
+      if (!info) return;
+      showScreen('ready');
+      const fill = (card, imgEl, urlEl, data) => {
+        card.style.display = data ? 'flex' : 'none';
+        if (data) {
+          imgEl.src = data.qr;
+          urlEl.textContent = data.url
+            .replace(/^https?:\/\//, '')
+            .replace(/\/\?t=.+/, '');
+        }
+      };
+      fill($('ios-card'),     $('ios-qr'),     $('ios-url'),     info.ios);
+      fill($('android-card'), $('android-qr'), $('android-url'), info.android);
+    }
+
+    function loadQR() {
+      window.numpad.getInfo().then(showQR);
+      window.numpad.onInfo(showQR);
+    }
+
+    // ── 起動シーケンス ────────────────────────────────────────────
+    checkA11y();
   </script>
 </body>
 </html>
