@@ -67,11 +67,16 @@
 
     // ── アクセシビリティ確認 ──────────────────────────────────────
     async function checkA11y() {
-      const ok = await window.numpad.getAccessibility();
-      if (ok) {
-        showScreen('waiting');
-        loadQR();
-      } else {
+      try {
+        const ok = await window.numpad.getAccessibility();
+        if (ok) {
+          showScreen('waiting');
+          loadQR();
+        } else {
+          showScreen('setup');
+        }
+      } catch {
+        // IPC エラー時は安全のためセットアップ画面を表示
         showScreen('setup');
       }
     }
@@ -80,13 +85,33 @@
       window.numpad.openAccessibility();
     });
 
-    $('btn-check').addEventListener('click', async () => {
-      const ok = await window.numpad.getAccessibility();
-      if (ok) {
-        checkA11y(); // 再チェックして遷移
-      } else {
-        $('setup-err').textContent = 'まだ許可されていません。スイッチがオンか確認してください。';
-      }
+    $('btn-check').addEventListener('click', () => {
+      // macOS はアクセシビリティ許可後すぐに状態を更新しないことがある。
+      // 最大 10 秒間 500ms ごとにポーリングして遷移する。
+      const btn = $('btn-check');
+      const errEl = $('setup-err');
+      errEl.textContent = '';
+      btn.disabled = true;
+      btn.textContent = '確認中…';
+
+      const deadline = Date.now() + 10000;
+      const poll = async () => {
+        const ok = await window.numpad.getAccessibility().catch(() => false);
+        if (ok) {
+          btn.disabled = false;
+          btn.textContent = '許可した ✓';
+          checkA11y();
+          return;
+        }
+        if (Date.now() < deadline) {
+          setTimeout(poll, 500);
+        } else {
+          btn.disabled = false;
+          btn.textContent = '許可した ✓';
+          errEl.textContent = 'まだ許可されていません。スイッチがオンか確認してください。';
+        }
+      };
+      poll();
     });
 
     // ── QR 表示 ──────────────────────────────────────────────────

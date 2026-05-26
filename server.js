@@ -8,6 +8,7 @@ const os = require('os');
 const crypto = require('crypto');
 const { execFile } = require('child_process');
 const { Server } = require('socket.io');
+const { systemPreferences } = require('electron');
 
 const PORT    = Number(process.env.PORT) || 3000;
 const HOST    = process.env.HOST || '0.0.0.0';
@@ -77,6 +78,14 @@ function buildAppleScript(payload) {
 
 function sendKeystroke(payload) {
   return new Promise((resolve, reject) => {
+    // osascript を呼ぶ前にアクセシビリティ権限を確認する。
+    // 権限がない状態で osascript を呼ぶと macOS 自身がダイアログを表示してしまうため、
+    // ここで止めてエラーを返す。
+    if (!systemPreferences.isTrustedAccessibilityClient(false)) {
+      reject(new Error('アクセシビリティ権限がありません（Mac の設定で KeyFlow を許可してください）'));
+      return;
+    }
+
     const script = buildAppleScript(payload);
     if (!script) {
       reject(new Error('invalid payload'));
