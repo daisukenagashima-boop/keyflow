@@ -75,7 +75,7 @@ async function installUpdate(dmgPath) {
     if (!withAdmin) {
       execFile('ditto', [srcApp, dstApp], (err) => err ? reject(err) : resolve());
     } else {
-      const esc = (s) => s.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+      const esc = (s) => s.replace(/\\/g, '\\\\').replace(/'/g, "\\'"  );
       const script = `do shell script "ditto '${esc(srcApp)}' '${esc(dstApp)}'" with administrator privileges`;
       execFile('osascript', ['-e', script], (err) => err ? reject(err) : resolve());
     }
@@ -197,9 +197,16 @@ async function buildInfo() {
 ipcMain.handle('get-server-info',    async () => buildInfo());
 ipcMain.handle('get-accessibility',  () => systemPreferences.isTrustedAccessibilityClient(false));
 ipcMain.handle('get-version',        () => app.getVersion());
-ipcMain.on    ('open-accessibility', () => shell.openExternal(
-  'x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility'
-));
+ipcMain.on    ('open-accessibility', () => {
+  // アプリ更新後は古いバイナリの登録が残り「オンなのに未許可」になる。
+  // 設定を開く前に古い TCC エントリをリセットして、ユーザーに新しいバイナリを追加させる。
+  if (!systemPreferences.isTrustedAccessibilityClient(false)) {
+    execFile('tccutil', ['reset', 'Accessibility', 'com.nagashimadaisuke.keyflow'], () => {});
+  }
+  shell.openExternal(
+    'x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility'
+  );
+});
 
 async function sendInfo() {
   if (!win || win.isDestroyed()) return;
