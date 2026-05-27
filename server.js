@@ -6,7 +6,7 @@ const path = require('path');
 const fs = require('fs');
 const os = require('os');
 const crypto = require('crypto');
-const { execFile } = require('child_process');
+const { execFile, spawn } = require('child_process');
 const { Server } = require('socket.io');
 const { systemPreferences } = require('electron');
 
@@ -33,6 +33,38 @@ const TOKEN = (() => {
   fs.writeFileSync(TOKEN_FILE, t + '\n', { mode: 0o600 });
   return t;
 })();
+
+// ── Mouse control daemon ─────────────────────────────────────────────────────
+const MOUSE_HELPER = path.join(BASE_DIR, 'bin', 'mousecontrol');
+let mouseProc = null;
+
+function ensureMouseProc() {
+  if (mouseProc && !mouseProc.killed) return true;
+  if (!fs.existsSync(MOUSE_HELPER)) return false;
+  mouseProc = spawn(MOUSE_HELPER, [], { stdio: ['pipe', 'ignore', 'ignore'] });
+  mouseProc.on('exit', () => { mouseProc = null; });
+  return true;
+}
+
+function sendMouse(cmd) {
+  if (ensureMouseProc()) mouseProc.stdin.write(cmd + '\n');
+}
+
+function handleMouse(payload) {
+  if (!systemPreferences.isTrustedAccessibilityClient(false)) {
+    throw new Error('アクセシビリティ権限がありません（Mac の設定で KeyFlow を許可してください）');
+  }
+  const { action, dx = 0, dy = 0 } = payload;
+  switch (action) {
+    case 'move':   sendMouse(`move ${+dx} ${+dy}`); break;
+    case 'click':  sendMouse('click');               break;
+    case 'rclick': sendMouse('rclick');              break;
+    case 'down':   sendMouse('down');                break;
+    case 'up':     sendMouse('up');                  break;
+    case 'scroll': sendMouse(`scroll ${+dx} ${+dy}`); break;
+    default: throw new Error('unknown mouse action');
+  }
+}
 
 const KEY_CODES = {
   enter: 36,
@@ -146,9 +178,13 @@ io.on('connection', (socket) => {
 
   socket.on('input', async (payload, ack) => {
     try {
-      await sendKeystroke(payload);
-      const label = payload?.type === 'key' ? `<${payload.value}>` : JSON.stringify(payload?.value);
-      console.log(`  ${socket.id} -> ${label}`);
+      if (payload?.type === 'mouse') {
+        handleMouse(payload);
+      } else {
+        await sendKeystroke(payload);
+        const label = payload?.type === 'key' ? `<${payload.value}>` : JSON.stringify(payload?.value);
+        console.log(`  ${socket.id} -> ${label}`);
+      }
       if (typeof ack === 'function') ack({ ok: true });
     } catch (e) {
       console.error('  send error:', e.message);

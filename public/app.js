@@ -43,9 +43,17 @@
   socket.on('disconnect', (r) => setStatus('○ ' + r, 'bad'));
   socket.on('connect_error', (e) => setStatus('× ' + e.message, 'bad'));
 
-  function send(type, value) {
+  // ── Send ───────────────────────────────────────────────────────────────
+  function send(typeOrPayload, value) {
     if (!socket.connected) return;
-    socket.emit('input', { type, value }, (ack) => {
+    const payload = (typeof typeOrPayload === 'object' && typeOrPayload !== null)
+      ? typeOrPayload : { type: typeOrPayload, value };
+    // mouse move は volatile（詰まっても捨てる）
+    if (payload.type === 'mouse' && payload.action === 'move') {
+      socket.volatile.emit('input', payload);
+      return;
+    }
+    socket.emit('input', payload, (ack) => {
       if (ack && !ack.ok) {
         setStatus('× ' + (ack.error || 'error'), 'bad');
         setTimeout(() => {
@@ -55,9 +63,28 @@
     });
   }
 
+  // ── Pages / Tabs ───────────────────────────────────────────────────────
+  const pagesEl = document.getElementById('pages');
+
+  function currentPage() {
+    if (!pagesEl) return 0;
+    return Math.round(pagesEl.scrollLeft / pagesEl.clientWidth);
+  }
+
+  document.querySelectorAll('.tab').forEach((tab, i) => {
+    tab.addEventListener('click', () => {
+      pagesEl.scrollTo({ left: i * pagesEl.clientWidth, behavior: 'smooth' });
+    });
+  });
+
+  pagesEl.addEventListener('scroll', () => {
+    const page = currentPage();
+    document.querySelectorAll('.tab').forEach((tab, i) => {
+      tab.classList.toggle('tab-active', i === page);
+    });
+  });
+
   // ── Haptic + audio feedback ────────────────────────────────────────────
-  // Category → [vibrateMs, audioFreq, audioPeak, audioDur]
-  // vibrate: Android Chrome; audio click: iOS Safari + all fallbacks
   const HAPTIC = {
     number: { vibe: 5,             freq: 1300, peak: 0.030, dur: 0.022 },
     symbol: { vibe: 8,             freq: 1000, peak: 0.050, dur: 0.032 },
@@ -94,13 +121,13 @@
     return 'number';
   }
 
-  // ── Interaction state ──────────────────────────────────────────────────
-  const LONG_PRESS_MS  = 300;   // ms before cursor mode activates
-  const CLEAR_PRESS_MS = 600;   // ms hold on ⌫ to trigger clear-all
-  const STEP_SLOW      = 44;    // px per key at start (slow)
-  const STEP_FAST      = 11;    // px per key at full speed
-  const ACCEL_MS       = 1800;  // ms to reach full speed (ease-in)
-  const CANCEL_DIST_PX = 10;    // px of movement that cancels long-press
+  // ── Numpad interaction state ───────────────────────────────────────────
+  const LONG_PRESS_MS  = 300;
+  const CLEAR_PRESS_MS = 600;
+  const STEP_SLOW      = 44;
+  const STEP_FAST      = 11;
+  const ACCEL_MS       = 1800;
+  const CANCEL_DIST_PX = 10;
 
   let pressTimer      = null;
   let cursorMode      = false;
@@ -112,7 +139,6 @@
   let didMove   = false;
   let clearFired = false;
 
-  // Ease-in: starts slow, accelerates to full speed over ACCEL_MS.
   function cursorStep() {
     const t = Math.min((Date.now() - cursorStartTime) / ACCEL_MS, 1);
     return STEP_SLOW + (STEP_FAST - STEP_SLOW) * (t * t);
@@ -132,8 +158,8 @@
     document.body.classList.remove('cursor-mode');
   }
 
-  // Use capture so we intercept before any other handlers.
   document.addEventListener('pointerdown', (e) => {
+    if (currentPage() !== 0) return;
     if (e.button != null && e.button !== 0) return;
     didMove    = false;
     clearFired = false;
@@ -148,7 +174,6 @@
 
     const isBackspace = pressedBtn?.dataset.value === 'backspace';
     if (isBackspace) {
-      // ⌫ 長押し → 全削除（カーソルモードには入らない）
       pressedBtn.classList.add('hold-del');
       pressTimer = setTimeout(() => {
         clearFired = true;
@@ -166,6 +191,7 @@
   }, true);
 
   document.addEventListener('pointermove', (e) => {
+    if (currentPage() !== 0) return;
     const dx = e.clientX - lastX;
     const dy = e.clientY - lastY;
     lastX = e.clientX;
@@ -186,7 +212,6 @@
       return;
     }
 
-    // Cancel long-press if finger drifts too far before threshold.
     if (Math.hypot(e.clientX - startX, e.clientY - startY) > CANCEL_DIST_PX) {
       clearTimeout(pressTimer);
       pressTimer = null;
@@ -210,6 +235,7 @@
   }
 
   document.addEventListener('pointerup', (e) => {
+    if (currentPage() !== 0) { resetPressState(); return; }
     if (cursorMode) {
       exitCursorMode();
       if (pressedBtn) { pressedBtn.classList.remove('active'); pressedBtn = null; }
@@ -218,7 +244,6 @@
       return;
     }
 
-    // Quick tap → fire the button（全削除が発火済みの場合はスキップ）.
     if (pressedBtn && !didMove && !clearFired) {
       send(pressedBtn.dataset.type, pressedBtn.dataset.value);
       haptic(hapticCat(pressedBtn));
@@ -231,10 +256,128 @@
     resetPressState();
   }, true);
 
-  // Prevent iOS long-press context menu.
   document.addEventListener('contextmenu', (e) => e.preventDefault());
 
-  // ── Service Worker (HTTPS / localhost only) ────────────────────────────
+  // ── Trackpad ───────────────────────────────────────────────────────────
+  const MOVE_SCALE   = 2.2;
+  const SCROLL_SCALE = 0.6;
+  const DRAG_DELAY   = 280;  // ms 長押しでドラッグ開始
+  const TAP_MAX_MS   = 260;  // ms 以内ならタップ判定
+
+  const trackpadEl = document.getElementById('trackpad');
+  if (trackpadEl) {
+    let tpTouches   = {};
+    let tpMaxFinger = 0;
+    let tpStartTime = 0;
+    let tpDragging  = false;
+    let tpDragTimer = null;
+
+    function tpFingerCount() { return Object.keys(tpTouches).length; }
+
+    trackpadEl.addEventListener('touchstart', (e) => {
+      e.preventDefault();
+      for (const t of e.changedTouches) {
+        tpTouches[t.identifier] = { x: t.clientX, y: t.clientY };
+      }
+      const n = tpFingerCount();
+      if (n > tpMaxFinger) tpMaxFinger = n;
+      if (n === 1 && tpMaxFinger === 1) {
+        tpStartTime = Date.now();
+        tpDragTimer = setTimeout(() => {
+          tpDragging = true;
+          send({ type: 'mouse', action: 'down' });
+        }, DRAG_DELAY);
+      }
+    }, { passive: false });
+
+    trackpadEl.addEventListener('touchmove', (e) => {
+      e.preventDefault();
+      const fingers = e.touches.length;
+
+      if (fingers === 1) {
+        const t = e.touches[0];
+        const prev = tpTouches[t.identifier];
+        if (prev) {
+          const dx = (t.clientX - prev.x) * MOVE_SCALE;
+          const dy = (t.clientY - prev.y) * MOVE_SCALE;
+          if (Math.abs(dx) > 0.1 || Math.abs(dy) > 0.1) {
+            send({ type: 'mouse', action: 'move', dx, dy });
+            // 動いたらドラッグ開始タイマーをキャンセル（長押しのみドラッグ）
+            if (!tpDragging) { clearTimeout(tpDragTimer); tpDragTimer = null; }
+          }
+        }
+        tpTouches[t.identifier] = { x: t.clientX, y: t.clientY };
+
+      } else if (fingers === 2) {
+        let totalDx = 0, totalDy = 0;
+        for (const t of e.touches) {
+          const prev = tpTouches[t.identifier];
+          if (prev) {
+            totalDx += t.clientX - prev.x;
+            totalDy += t.clientY - prev.y;
+          }
+          tpTouches[t.identifier] = { x: t.clientX, y: t.clientY };
+        }
+        send({ type: 'mouse', action: 'scroll', dx: (totalDx / 2) * SCROLL_SCALE, dy: (totalDy / 2) * SCROLL_SCALE });
+
+      } else {
+        for (const t of e.touches) {
+          tpTouches[t.identifier] = { x: t.clientX, y: t.clientY };
+        }
+      }
+    }, { passive: false });
+
+    trackpadEl.addEventListener('touchend', (e) => {
+      e.preventDefault();
+      const elapsed = Date.now() - tpStartTime;
+
+      if (tpDragging) {
+        send({ type: 'mouse', action: 'up' });
+        tpDragging = false;
+      }
+      clearTimeout(tpDragTimer);
+      tpDragTimer = null;
+
+      if (e.touches.length === 0) {
+        if (elapsed < TAP_MAX_MS) {
+          if (tpMaxFinger === 1) {
+            // 左クリック + リップル
+            send({ type: 'mouse', action: 'click' });
+            const last = Object.values(tpTouches)[0];
+            if (last) {
+              const ripple = document.createElement('div');
+              ripple.className = 'tp-ripple';
+              ripple.style.left = (last.x - 22) + 'px';
+              ripple.style.top  = (last.y - 22) + 'px';
+              document.body.appendChild(ripple);
+              setTimeout(() => ripple.remove(), 400);
+            }
+          } else if (tpMaxFinger === 2) {
+            // 右クリック
+            send({ type: 'mouse', action: 'rclick' });
+          }
+        }
+        tpTouches   = {};
+        tpMaxFinger = 0;
+      } else {
+        for (const t of e.changedTouches) delete tpTouches[t.identifier];
+      }
+    }, { passive: false });
+
+    trackpadEl.addEventListener('touchcancel', (e) => {
+      e.preventDefault();
+      if (tpDragging) {
+        send({ type: 'mouse', action: 'up' });
+        tpDragging = false;
+      }
+      clearTimeout(tpDragTimer);
+      tpDragTimer = null;
+      tpTouches   = {};
+      tpMaxFinger = 0;
+    }, { passive: false });
+  }
+
+  // ── Service Worker ─────────────────────────────────────────────────────
   if ('serviceWorker' in navigator &&
       (location.protocol === 'https:' || location.hostname === 'localhost')) {
     navigator.serviceWorker.register('/sw.js').catch(() => {});
