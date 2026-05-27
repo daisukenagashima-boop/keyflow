@@ -33,10 +33,10 @@
 
   const verEl = document.getElementById('ver');
 
-  // Mac のトラックパッド速度設定に合わせるスケール
-  // healthz から取得した trackpadScaling（0.125〜3）× 係数でポインタ速度を合わせる
-  const TP_SCALE_FACTOR = 1.8; // 実機チューニング値
-  let MOVE_SCALE = 2.2;        // デフォルト（取得できない場合のフォールバック）
+  // Mac のトラックパッド設定に合わせる
+  const TP_SCALE_FACTOR = 1.8; // ポインタ速度チューニング値
+  let MOVE_SCALE    = 2.2;     // デフォルト（取得できない場合のフォールバック）
+  let SCROLL_DIR    = 1;       // 1=ナチュラル（指と同方向）, -1=従来（逆）
 
   socket.on('connect', () => {
     setStatus('● connected', 'ok');
@@ -45,6 +45,7 @@
       .then(d => {
         if (verEl && d.version) verEl.textContent = 'v' + d.version;
         if (d.trackpadScaling) MOVE_SCALE = d.trackpadScaling * TP_SCALE_FACTOR;
+        if (typeof d.naturalScrolling === 'boolean') SCROLL_DIR = d.naturalScrolling ? 1 : -1;
       })
       .catch(() => {});
   });
@@ -325,7 +326,7 @@
           }
           tpTouches[t.identifier] = { x: t.clientX, y: t.clientY };
         }
-        send({ type: 'mouse', action: 'scroll', dx: (totalDx / 2) * SCROLL_SCALE, dy: (totalDy / 2) * SCROLL_SCALE });
+        send({ type: 'mouse', action: 'scroll', dx: (totalDx / 2) * SCROLL_SCALE * SCROLL_DIR, dy: (totalDy / 2) * SCROLL_SCALE * SCROLL_DIR });
 
       } else {
         for (const t of e.touches) {

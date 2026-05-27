@@ -1,6 +1,6 @@
 {
-  "version": "1.0.8",
-  "download": "https://github.com/daisukenagashima-boop/keyflow/releases/download/v1.0.8/KeyFlow-1.0.8-universal.dmg",
+  "version": "1.0.9",
+  "download": "https://github.com/daisukenagashima-boop/keyflow/releases/download/v1.0.9/KeyFlow-1.0.9-universal.dmg",
   "url": "https://github.com/daisukenagashima-boop/keyflow/releases",
-  "notes": "トラックパッド速度を Mac のシステム設定と自動同期"
+  "notes": "スクロール方向を Mac のシステム設定と自動同期"
 }

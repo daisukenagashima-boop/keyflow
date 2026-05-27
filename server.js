@@ -168,18 +168,22 @@ app.use(express.static(path.join(BASE_DIR, 'public'), {
   },
 }));
 
-// macOS のトラックパッド軌跡速度を読む（0.125〜3.0、デフォルト1）
-function getTrackpadScaling() {
-  try {
-    const out = require('child_process')
-      .execSync('defaults read -g com.apple.trackpad.scaling 2>/dev/null', { timeout: 1000 })
-      .toString().trim();
-    const v = parseFloat(out);
-    return isNaN(v) ? 1.0 : v;
-  } catch { return 1.0; }
+// macOS のトラックパッド設定を読む
+function getMacTrackpadSettings() {
+  const exec = (cmd) => {
+    try { return require('child_process').execSync(cmd, { timeout: 1000 }).toString().trim(); }
+    catch { return null; }
+  };
+  const scaling = parseFloat(exec('defaults read -g com.apple.trackpad.scaling 2>/dev/null') || '1');
+  // 1 = ナチュラル（指の方向にコンテンツが動く）, 0 = 従来
+  const naturalScroll = exec('defaults read -g com.apple.swipescrolldirection 2>/dev/null') !== '0';
+  return {
+    trackpadScaling: isNaN(scaling) ? 1.0 : scaling,
+    naturalScrolling: naturalScroll,
+  };
 }
 
-app.get('/healthz', (_req, res) => res.json({ ok: true, version: VERSION, trackpadScaling: getTrackpadScaling() }));
+app.get('/healthz', (_req, res) => res.json({ ok: true, version: VERSION, ...getMacTrackpadSettings() }));
 
 io.use((socket, next) => {
   const auth = socket.handshake.auth?.token || socket.handshake.query?.token;
