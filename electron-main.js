@@ -245,7 +245,7 @@ function createWindow() {
 function buildTrayMenu() {
   const openAtLogin = app.getLoginItemSettings().openAtLogin;
   return Menu.buildFromTemplate([
-    { label: 'QR コードを表示', click: () => { win?.show(); win?.focus(); } },
+    { label: 'QR コードを表示', click: () => { if (!win || win.isDestroyed()) return; win.show(); win.focus(); } },
     { type: 'separator' },
     {
       label: 'ログイン時に自動起動',
