@@ -35,7 +35,11 @@ const TOKEN = (() => {
 })();
 
 // ── Mouse control daemon ─────────────────────────────────────────────────────
-const MOUSE_HELPER = path.join(BASE_DIR, 'bin', 'mousecontrol');
+// ASAR パッケージ内のバイナリは spawn できないため asarUnpack したパスを使う
+const MOUSE_HELPER = path.join(
+  BASE_DIR.replace(/app\.asar([/\\]|$)/, 'app.asar.unpacked$1'),
+  'bin', 'mousecontrol'
+);
 let mouseProc = null;
 
 function ensureMouseProc() {

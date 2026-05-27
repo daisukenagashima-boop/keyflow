@@ -1,6 +1,6 @@
 {
-  "version": "1.0.6",
-  "download": "https://github.com/daisukenagashima-boop/keyflow/releases/download/v1.0.6/KeyFlow-1.0.6-universal.dmg",
+  "version": "1.0.7",
+  "download": "https://github.com/daisukenagashima-boop/keyflow/releases/download/v1.0.7/KeyFlow-1.0.7-universal.dmg",
   "url": "https://github.com/daisukenagashima-boop/keyflow/releases",
-  "notes": "トラックパッドモード追加 / 起動クラッシュ修正"
+  "notes": "トラックパッドが動作しない問題を修正"
 }
