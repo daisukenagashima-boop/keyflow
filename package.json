@@ -1,13 +1,14 @@
 {
   "name": "iphone-numpad",
-  "version": "1.0.1",
+  "version": "1.0.5",
   "private": true,
   "description": "iPhone を MacBook 用の表入力補助テンキーにする",
   "main": "electron-main.js",
   "scripts": {
     "start": "node server.js",
     "dev": "electron .",
-    "build": "electron-builder --mac"
+    "compile-mouse": "bash scripts/compile-mouse.sh",
+    "build": "npm run compile-mouse && electron-builder --mac"
   },
   "engines": {
     "node": ">=18"
@@ -30,6 +31,7 @@
       "server.js",
       "src/**",
       "public/**",
+      "bin/mousecontrol",
       "node_modules/**",
       "!node_modules/**/*.md",
       "!node_modules/**/test/**",

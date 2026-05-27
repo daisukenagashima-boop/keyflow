@@ -26,34 +26,30 @@ function isNewer(a, b) {
   return false;
 }
 
-// リダイレクトを辿りながらファイルをダウンロードする（最大10回）
-function downloadFile(url, dest) {
-  return new Promise((resolve, reject) => {
-    const attempt = (u, redirects = 0) => {
-      if (redirects > 10) {
-        reject(new Error('リダイレクトが多すぎます'));
-        return;
-      }
-      const mod = u.startsWith('https') ? https : http;
-      const file = fs.createWriteStream(dest);
-      mod.get(u, { headers: { 'User-Agent': `KeyFlow/${app.getVersion()}` } }, (res) => {
-        if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
-          file.destroy();
-          attempt(res.headers.location, redirects + 1);
-          return;
-        }
-        if (res.statusCode !== 200) {
-          file.destroy();
-          reject(new Error(`HTTP ${res.statusCode}`));
-          return;
-        }
-        res.pipe(file);
-        file.on('finish', () => file.close(resolve));
-        file.on('error', reject);
-        res.on('error', reject);
-      }).on('error', reject);
-    };
-    attempt(url);
+// fetch を使ってダウンロード（リダイレクトは自動処理）
+// onProgress(0.0〜1.0) でダウンロード進捗を通知する
+async function downloadFile(url, dest, onProgress) {
+  const { Readable } = require('stream');
+  const res = await fetch(url, {
+    headers: { 'User-Agent': `KeyFlow/${app.getVersion()}` },
+    signal: AbortSignal.timeout(300000), // 5分タイムアウト
+  });
+  if (!res.ok) throw new Error(`HTTP ${res.status} — ファイルが見つかりません`);
+
+  const total = Number(res.headers.get('content-length') || 0);
+  let received = 0;
+  const file = fs.createWriteStream(dest);
+
+  await new Promise((resolve, reject) => {
+    const src = Readable.fromWeb(res.body);
+    src.on('data', (chunk) => {
+      received += chunk.length;
+      if (total > 0) onProgress?.(received / total);
+    });
+    src.on('error', (e) => { file.destroy(); reject(e); });
+    file.on('error', reject);
+    file.on('finish', resolve);
+    src.pipe(file);
   });
 }
 
@@ -124,12 +120,31 @@ async function checkForUpdates(manual = false) {
     // ── 自動インストール ──────────────────────────────────────────
     const tmpDmg = path.join(os.tmpdir(), `KeyFlow-${data.version}.dmg`);
 
-    new Notification({ title: 'KeyFlow', body: `v${data.version} をダウンロード中…` }).show();
+    new Notification({ title: 'KeyFlow', body: `v${data.version} のダウンロードを開始します` }).show();
+
+    // Dock アイコンにプログレスバーを表示して進捗を伝える
+    let lastNotifPct = 0;
+    const onProgress = (pct) => {
+      if (win && !win.isDestroyed()) win.setProgressBar(pct);
+      // 0% → 50% → 100% の節目で通知
+      const p = Math.floor(pct * 100);
+      if (p >= lastNotifPct + 50) {
+        lastNotifPct = p;
+        new Notification({ title: 'KeyFlow', body: `v${data.version} ダウンロード中… ${p}%` }).show();
+      }
+    };
 
     try {
-      await downloadFile(data.download, tmpDmg);
+      await downloadFile(data.download, tmpDmg, onProgress);
+      if (win && !win.isDestroyed()) win.setProgressBar(-1); // プログレスバーを消す
     } catch (e) {
-      await dialog.showMessageBox({ type: 'error', title: 'KeyFlow', message: 'ダウンロードに失敗しました', detail: e.message, buttons: ['OK'] });
+      if (win && !win.isDestroyed()) win.setProgressBar(-1);
+      await dialog.showMessageBox({
+        type: 'error', title: 'KeyFlow',
+        message: 'ダウンロードに失敗しました',
+        detail: e.message + '\n\n手動でダウンロードページからインストールしてください',
+        buttons: ['ダウンロードページを開く', 'キャンセル'],
+      }).then(({ response }) => { if (response === 0) shell.openExternal(data.url); });
       return;
     }
 
@@ -197,9 +212,16 @@ async function buildInfo() {
 ipcMain.handle('get-server-info',    async () => buildInfo());
 ipcMain.handle('get-accessibility',  () => systemPreferences.isTrustedAccessibilityClient(false));
 ipcMain.handle('get-version',        () => app.getVersion());
-ipcMain.on    ('open-accessibility', () => shell.openExternal(
-  'x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility'
-));
+ipcMain.on    ('open-accessibility', () => {
+  // アプリ更新後は古いバイナリの登録が残り「オンなのに未許可」になる。
+  // 設定を開く前に古い TCC エントリをリセットして、ユーザーに新しいバイナリを追加させる。
+  if (!systemPreferences.isTrustedAccessibilityClient(false)) {
+    execFile('tccutil', ['reset', 'Accessibility', 'com.nagashimadaisuke.keyflow'], () => {});
+  }
+  shell.openExternal(
+    'x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility'
+  );
+});
 
 async function sendInfo() {
   if (!win || win.isDestroyed()) return;
@@ -238,7 +260,7 @@ function createWindow() {
 function buildTrayMenu() {
   const openAtLogin = app.getLoginItemSettings().openAtLogin;
   return Menu.buildFromTemplate([
-    { label: 'QR コードを表示', click: () => { win?.show(); win?.focus(); } },
+    { label: 'QR コードを表示', click: () => { if (!win || win.isDestroyed()) return; win.show(); win.focus(); } },
     { type: 'separator' },
     {
       label: 'ログイン時に自動起動',
@@ -263,7 +285,7 @@ function createTray() {
   tray = new Tray(img);
   tray.setToolTip('KeyFlow');
   tray.on('click', () => {
-    if (!win) return;
+    if (!win || win.isDestroyed()) return;
     win.isVisible() ? win.focus() : win.show();
   });
   tray.setContextMenu(buildTrayMenu());
