@@ -168,7 +168,18 @@ app.use(express.static(path.join(BASE_DIR, 'public'), {
   },
 }));
 
-app.get('/healthz', (_req, res) => res.json({ ok: true, version: VERSION }));
+// macOS のトラックパッド軌跡速度を読む（0.125〜3.0、デフォルト1）
+function getTrackpadScaling() {
+  try {
+    const out = require('child_process')
+      .execSync('defaults read -g com.apple.trackpad.scaling 2>/dev/null', { timeout: 1000 })
+      .toString().trim();
+    const v = parseFloat(out);
+    return isNaN(v) ? 1.0 : v;
+  } catch { return 1.0; }
+}
+
+app.get('/healthz', (_req, res) => res.json({ ok: true, version: VERSION, trackpadScaling: getTrackpadScaling() }));
 
 io.use((socket, next) => {
   const auth = socket.handshake.auth?.token || socket.handshake.query?.token;

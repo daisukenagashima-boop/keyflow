@@ -33,11 +33,19 @@
 
   const verEl = document.getElementById('ver');
 
+  // Mac のトラックパッド速度設定に合わせるスケール
+  // healthz から取得した trackpadScaling（0.125〜3）× 係数でポインタ速度を合わせる
+  const TP_SCALE_FACTOR = 1.8; // 実機チューニング値
+  let MOVE_SCALE = 2.2;        // デフォルト（取得できない場合のフォールバック）
+
   socket.on('connect', () => {
     setStatus('● connected', 'ok');
     fetch('/healthz')
       .then(r => r.json())
-      .then(d => { if (verEl && d.version) verEl.textContent = 'v' + d.version; })
+      .then(d => {
+        if (verEl && d.version) verEl.textContent = 'v' + d.version;
+        if (d.trackpadScaling) MOVE_SCALE = d.trackpadScaling * TP_SCALE_FACTOR;
+      })
       .catch(() => {});
   });
   socket.on('disconnect', (r) => setStatus('○ ' + r, 'bad'));
@@ -259,7 +267,6 @@
   document.addEventListener('contextmenu', (e) => e.preventDefault());
 
   // ── Trackpad ───────────────────────────────────────────────────────────
-  const MOVE_SCALE   = 2.2;
   const SCROLL_SCALE = 0.6;
   const DRAG_DELAY   = 280;  // ms 長押しでドラッグ開始
   const TAP_MAX_MS   = 260;  // ms 以内ならタップ判定

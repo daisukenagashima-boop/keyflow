@@ -1,6 +1,6 @@
 {
   "name": "iphone-numpad",
-  "version": "1.0.7",
+  "version": "1.0.8",
   "private": true,
   "description": "iPhone を MacBook 用の表入力補助テンキーにする",
   "main": "electron-main.js",
